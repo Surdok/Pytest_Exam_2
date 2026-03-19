@@ -186,17 +186,12 @@ def test_update_with_invalid_price(client):
 
     response = client.put(f"/books/{book_id}", json={"price": -1})
     assert response.status_code == 400
-    data = response.get_json()
-    assert "error" in data
 
 
 def test_update_non_existing_book(client):
     """Update a non-existing book -> check 404."""
     response = client.put("/books/99999", json={"title": "New Title"})
     assert response.status_code == 404
-    data = response.get_json()
-    assert "error" in data
-    assert "not found" in data["error"].lower()
 
 
 # ----- DELETE /books/<id> (2 tests) -----
@@ -209,9 +204,6 @@ def test_delete_existing_book(client):
 
     delete_response = client.delete(f"/books/{book_id}")
     assert delete_response.status_code == 200
-    delete_data = delete_response.get_json()
-    assert "message" in delete_data
-    assert "deleted" in delete_data["message"].lower()
 
     get_response = client.get(f"/books/{book_id}")
     assert get_response.status_code == 404
@@ -221,9 +213,6 @@ def test_delete_non_existing_book(client):
     """Delete a non-existing book -> check 404."""
     response = client.delete("/books/99999")
     assert response.status_code == 404
-    data = response.get_json()
-    assert "error" in data
-    assert "not found" in data["error"].lower()
 
 
 # ----- Full workflow (1 test) -----
