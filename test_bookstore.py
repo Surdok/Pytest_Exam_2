@@ -75,7 +75,191 @@ def create_sample_book(client, title="The Great Gatsby", author="F. Scott Fitzge
 #   - Create -> Read -> Update -> Read again -> Delete -> Confirm gone
 # ============================================================
 
-# TODO: Write your Part B tests here
+# ----- POST /books (4 tests) -----
+
+def test_create_valid_book(client):
+    """Create a valid book -> check 201 and response body."""
+    response = client.post("/books", json={
+        "title": "1984",
+        "author": "George Orwell",
+        "price": 9.99,
+    })
+    assert response.status_code == 201
+
+
+def test_create_missing_title(client):
+    """Create with missing title -> check 400."""
+    response = client.post("/books", json={
+        "author": "George Orwell",
+        "price": 9.99,
+    })
+    assert response.status_code == 400
+
+
+def test_create_empty_author(client):
+    """Create with empty author -> check 400."""
+    response = client.post("/books", json={
+        "title": "1984",
+        "author": "",
+        "price": 9.99,
+    })
+    assert response.status_code == 400
+
+
+def test_create_invalid_price(client):
+    """Create with invalid price (e.g. -5) -> check 400."""
+    response = client.post("/books", json={
+        "title": "1984",
+        "author": "George Orwell",
+        "price": -5,
+    })
+    assert response.status_code == 400
+
+
+# ----- GET /books (2 tests) -----
+
+def test_list_books_when_empty(client):
+    """List books when empty -> check 200 and empty list."""
+    response = client.get("/books")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["books"] == []
+
+
+def test_list_books_after_adding_two(client):
+    """List books after adding 2+ books -> check count."""
+    create_sample_book(client, title="Book A", author="Author A", price=10.0)
+    create_sample_book(client, title="Book B", author="Author B", price=20.0)
+    response = client.get("/books")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "books" in data
+    assert len(data["books"]) >= 2
+
+
+# ----- GET /books/<id> (2 tests) -----
+
+def test_get_existing_book(client):
+    """Get an existing book -> check 200 and correct data."""
+    create_response = create_sample_book(client)
+    assert create_response.status_code == 201
+    book_id = create_response.get_json()["book"]["id"]
+
+    response = client.get(f"/books/{book_id}")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "book" in data
+    assert data["book"]["title"] == "The Great Gatsby"
+    assert data["book"]["author"] == "F. Scott Fitzgerald"
+    assert data["book"]["price"] == 12.99
+
+
+def test_get_non_existing_book(client):
+    """Get a non-existing book -> check 404."""
+    response = client.get("/books/99999")
+    assert response.status_code == 404
+    data = response.get_json()
+    assert "error" in data
+    assert "not found" in data["error"].lower()
+
+
+# ----- PUT /books/<id> (3 tests) -----
+
+def test_update_book_title(client):
+    """Update a book's title -> check 200 and new title."""
+    create_response = create_sample_book(client)
+    assert create_response.status_code == 201
+    book_id = create_response.get_json()["book"]["id"]
+
+    response = client.put(f"/books/{book_id}", json={"title": "Updated Title"})
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "book" in data
+    assert data["book"]["title"] == "Updated Title"
+
+
+def test_update_with_invalid_price(client):
+    """Update with invalid price -> check 400."""
+    create_response = create_sample_book(client)
+    assert create_response.status_code == 201
+    book_id = create_response.get_json()["book"]["id"]
+
+    response = client.put(f"/books/{book_id}", json={"price": -1})
+    assert response.status_code == 400
+    data = response.get_json()
+    assert "error" in data
+
+
+def test_update_non_existing_book(client):
+    """Update a non-existing book -> check 404."""
+    response = client.put("/books/99999", json={"title": "New Title"})
+    assert response.status_code == 404
+    data = response.get_json()
+    assert "error" in data
+    assert "not found" in data["error"].lower()
+
+
+# ----- DELETE /books/<id> (2 tests) -----
+
+def test_delete_existing_book(client):
+    """Delete an existing book -> check 200, then GET returns 404."""
+    create_response = create_sample_book(client)
+    assert create_response.status_code == 201
+    book_id = create_response.get_json()["book"]["id"]
+
+    delete_response = client.delete(f"/books/{book_id}")
+    assert delete_response.status_code == 200
+    delete_data = delete_response.get_json()
+    assert "message" in delete_data
+    assert "deleted" in delete_data["message"].lower()
+
+    get_response = client.get(f"/books/{book_id}")
+    assert get_response.status_code == 404
+
+
+def test_delete_non_existing_book(client):
+    """Delete a non-existing book -> check 404."""
+    response = client.delete("/books/99999")
+    assert response.status_code == 404
+    data = response.get_json()
+    assert "error" in data
+    assert "not found" in data["error"].lower()
+
+
+# ----- Full workflow (1 test) -----
+
+def test_full_workflow_create_read_update_read_delete_confirm_gone(client):
+    """Create -> Read -> Update -> Read again -> Delete -> Confirm gone (all in one test)."""
+    # Create
+    create_response = create_sample_book(
+        client, title="Workflow Book", author="Workflow Author", price=15.0)
+    assert create_response.status_code == 201
+    book_id = create_response.get_json()["book"]["id"]
+
+    # Read
+    get1 = client.get(f"/books/{book_id}")
+    assert get1.status_code == 200
+    assert get1.get_json()["book"]["title"] == "Workflow Book"
+
+    # Update
+    update_response = client.put(
+        f"/books/{book_id}", json={"title": "Updated Workflow Book", "price": 25.0})
+    assert update_response.status_code == 200
+
+    # Read again
+    get2 = client.get(f"/books/{book_id}")
+    assert get2.status_code == 200
+    data = get2.get_json()["book"]
+    assert data["title"] == "Updated Workflow Book"
+    assert data["price"] == 25.0
+
+    # Delete
+    delete_response = client.delete(f"/books/{book_id}")
+    assert delete_response.status_code == 200
+
+    # Confirm gone
+    get3 = client.get(f"/books/{book_id}")
+    assert get3.status_code == 404
 
 
 # ============================================================
